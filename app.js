@@ -1,10 +1,12 @@
-//jshint esversion:6
+// app.js
 
-const express = require("express");
-const bodyParser = require("body-parser");
-const ejs = require("ejs");
-const { head } = require("lodash");
+const express = require('express');
+const bodyParser = require('body-parser');
+const ejs = require('ejs');
 const _ = require('lodash');
+const mongoose = require('mongoose');
+require('dotenv').config();
+
 
 const homeStartingContent = "Lacus vel facilisis volutpat est velit egestas dui id ornare. Semper auctor neque vitae tempus quam. Sit amet cursus sit amet dictum sit amet justo. Viverra tellus in hac habitasse. Imperdiet proin fermentum leo vel orci porta. Donec ultrices tincidunt arcu non sodales neque sodales ut. Mattis molestie a iaculis at erat pellentesque adipiscing. Magnis dis parturient montes nascetur ridiculus mus mauris vitae ultricies. Adipiscing elit ut aliquam purus sit amet luctus venenatis lectus. Ultrices vitae auctor eu augue ut lectus arcu bibendum at. Odio euismod lacinia at quis risus sed vulputate odio ut. Cursus mattis molestie a iaculis at erat pellentesque adipiscing.";
 const aboutContent = "Hac habitasse platea dictumst vestibulum rhoncus est pellentesque. Dictumst vestibulum rhoncus est pellentesque elit ullamcorper. Non diam phasellus vestibulum lorem sed. Platea dictumst quisque sagittis purus sit. Egestas sed sed risus pretium quam vulputate dignissim suspendisse. Mauris in aliquam sem fringilla. Semper risus in hendrerit gravida rutrum quisque non tellus orci. Amet massa vitae tortor condimentum lacinia quis vel eros. Enim ut tellus elementum sagittis vitae. Mauris ultrices eros in cursus turpis massa tincidunt dui.";
@@ -14,71 +16,89 @@ const app = express();
 
 app.set('view engine', 'ejs');
 
-app.use(bodyParser.urlencoded({extended: true}));
-app.use(express.static("public"));
+app.use(bodyParser.urlencoded({ extended: true }));
+app.use(express.static('public'));
 
+const userName = process.env.MONGOATLAS_USERNAME
+const password = process.env.MONGOATLAS_PASSWORD
+// Connect to MongoDB
+// const url = 'mongodb+srv://sharvdalal:MaBUV40Nr32qm3mo@cluster0.3gmoagi.mongodb.net/?retryWrites=true&w=majority';
 
-const posts = [];
+const url = "mongodb+srv://"+userName+":" + password + "@cluster0.3gmoagi.mongodb.net/?retryWrites=true&w=majority";
 
+mongoose.connect(url, { useNewUrlParser: true, useUnifiedTopology: true });
 
-app.get("/" , function(req,res){
-  res.render("home.ejs", {
-
-    startingContent: homeStartingContent,                  //Javascript Object That's why in curly braces
-    posts :posts
-   
-  }); 
- 
+// Create a schema for the blog post
+const postSchema = new mongoose.Schema({
+  title: String,
+  content: String,
 });
 
+// Create a model for the blog post
+const Post = mongoose.model('Post', postSchema);
 
-app.get("/about",function(req, res){
-  res.render("about.ejs",{aboutContent: aboutContent} );
-} );
-
-
-app.get("/contact",function(req, res){
-  res.render("contact.ejs",{ contactContent: contactContent} );
-} );
-
-
-app.get("/compose", function(req,res){
-  res.render("compose.ejs")
+app.listen(5000, function () {
+  console.log('Server started on port 5000');
 });
 
-app.post("/compose", function(req,res){
-  const post = {
-      title : req.body.postTitle,
-      content: req.body.postBody
-  };
-
-  posts.push(post);
-
-  res.redirect("/");
+app.get('/', function (req, res) {
+  // Retrieve all documents (blog posts) from MongoDB
+  Post.find({})
+    .then((posts) => {
+      res.render('home.ejs', {
+        startingContent: homeStartingContent,
+        posts: posts,
+      });
+    })
+    .catch((err) => {
+      console.log('Error occurred while retrieving blog posts:', err);
+    });
 });
 
+app.get('/about', function (req, res) {
+  res.render('about.ejs', { aboutContent: aboutContent });
+});
 
-app.get("/posts/:topic", function(req, res){
-  
+app.get('/contact', function (req, res) {
+  res.render('contact.ejs', { contactContent: contactContent });
+});
 
-let requestedTitle = _.lowerCase(req.params.topic);
+app.get('/compose', function (req, res) {
+  res.render('compose.ejs');
+});
 
-posts.forEach(function(post){
-  let storedTitle = _.lowerCase(post.title);
-  if(storedTitle === requestedTitle){
-    res.render("post.ejs", {title : post.title, content : post.content});
-  }
-  
-})
-})
+app.post('/compose', function (req, res) {
+  const post = new Post({
+    title: req.body.postTitle,
+    content: req.body.postBody,
+  });
 
+  // Save the new post to MongoDB
+  post
+    .save()
+    .then(() => {
+      console.log('Blog post saved successfully');
+      res.redirect('/');
+    })
+    .catch((err) => {
+      console.log('Error occurred while saving the blog post:', err);
+    });
+});
 
+app.get('/posts/:topic', function (req, res) {
+  let requestedTitle = _.lowerCase(req.params.topic);
 
-
-
-
-
-
-app.listen(5000, function() {
-  console.log("Server started on port 5000");
+  // Find the blog post with the matching title in MongoDB
+  Post.findOne({ title: requestedTitle })
+    .then((post) => {
+      if (post) {
+        res.render('post.ejs', { title: post.title, content: post.content });
+      } else {
+        // Handle the case when the blog post is not found
+        res.send('Blog post not found');
+      }
+    })
+    .catch((err) => {
+      console.log('Error occurred while retrieving the blog post:', err);
+    });
 });
